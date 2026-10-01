@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>笔记</title>
+<style>
+  :root {
+    --accent: #ffd6ff; --accent-strong: #a35c9c; --page-bg: #fff2fb;
+    --header-bg: #b96fb0; --border: #f2dced; --card-bg: #fff; --text: #3a2f38;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         background: var(--page-bg); color: var(--text);
+         display: flex; flex-direction: column; height: 100vh; }
+  header { background: var(--header-bg); color: #fff; padding: 12px 20px; display: flex;
+           align-items: center; justify-content: space-between; flex: 0 0 auto; }
+  header h1 { font-size: 17px; margin: 0; }
+  .hdr-nav { display: flex; align-items: center; gap: 4px; }
+  .hdr-nav a { color: #fff; text-decoration: none; font-size: 13px; opacity: .8;
+               padding: 5px 10px; border-radius: 7px; }
+  .hdr-nav a:hover { opacity: 1; background: rgba(255,255,255,.14); }
+  .hdr-nav a.on { opacity: 1; background: rgba(255,255,255,.22); font-weight: 600; }
+  .hdr-nav a.back { margin-left: 6px; opacity: .9; }
+
+  .wrap { flex: 1 1 auto; min-height: 0; display: flex; }
+
+  /* 目录树（层级折叠） */
+  .tree { flex: 0 0 268px; background: var(--card-bg); border-right: 1px solid var(--border);
+          overflow-y: auto; padding: 8px 8px 24px; min-height: 0; }
+  .t-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+           border: none; background: none; cursor: pointer; color: var(--text);
+           font-family: inherit; border-radius: 8px; padding: 7px 8px; line-height: 1.4; }
+  .t-row:hover { background: var(--page-bg); }
+  .t-row .caret { flex: 0 0 auto; width: 12px; font-size: 10px; color: #9a8f97;
+                  transition: transform .15s; display: inline-block; }
+  .t-row.open > .caret { transform: rotate(90deg); }
+  .t-row .lbl { flex: 1 1 auto; }
+  .t-l1 { font-size: 14px; font-weight: 700; color: var(--accent-strong); margin-top: 6px; }
+  .t-l2 { font-size: 13px; font-weight: 600; }
+  .t-l3 { font-size: 13px; }
+  .t-l3.sel { background: var(--accent); color: var(--accent-strong); font-weight: 600; }
+  .t-children { margin-left: 13px; border-left: 1px solid var(--border); padding-left: 3px; }
+  .t-children.hidden { display: none; }
+  .cnt { flex: 0 0 auto; font-size: 11px; background: var(--page-bg); color: #9a8f97;
+         border-radius: 999px; padding: 1px 7px; }
+  .t-l3.sel .cnt { background: #fff; color: var(--accent-strong); }
+
+  /* 编辑区 */
+  .editor { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+            position: relative; }
+  .ed-head { flex: 0 0 auto; padding: 16px 22px 10px; border-bottom: 1px solid var(--border);
+             display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ed-head .title { font-size: 15px; font-weight: 600; }
+  .ed-head .title .muted { color: #9a8f97; font-weight: 400; }
+  #edAdd { padding: 7px 14px; border: 1px dashed var(--accent-strong); border-radius: 9px;
+           background: var(--page-bg); color: var(--accent-strong); cursor: pointer; font-size: 13px; }
+  #edAdd.hidden { display: none; }
+  #edList { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 22px 40px;
+            max-width: 760px; width: 100%; }
+  .ed-empty { color: #9a8f97; font-size: 13.5px; line-height: 1.8; padding: 10px 2px; }
+  .note-item { border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px;
+               margin-bottom: 14px; background: var(--card-bg); }
+  .note-item .note-time { font-size: 11px; color: #9a8f97; display: flex; justify-content: space-between;
+                          align-items: center; margin-bottom: 6px; }
+  .note-del { border: none; background: none; color: #b9adb4; cursor: pointer; font-size: 12px; }
+  .note-del:hover { color: var(--accent-strong); }
+  .note-item textarea { width: 100%; border: none; background: transparent; resize: none;
+                        font-family: inherit; font-size: 14.5px; line-height: 1.7; color: var(--text);
+                        min-height: 56px; display: block; }
+  .note-item textarea:focus { outline: none; }
+  #edSaved { position: absolute; left: 50%; transform: translateX(-50%); bottom: 16px;
+             background: var(--accent); color: var(--accent-strong); border-radius: 999px;
+             padding: 6px 18px; font-size: 12.5px; transition: opacity .3s; }
+  #edSaved.hidden { display: none; }
+
+  @media (max-width: 760px) {
+    .wrap { flex-direction: column; }
+    .tree { flex: 0 0 auto; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="hdrTitle">笔记</h1>
+  <div class="hdr-nav">
+    <a href="#learn" data-f="learn">学习笔记</a>
+    <a href="#interview" data-f="interview">面试笔记</a>
+    <a href="#all" data-f="all">全部</a>
+    <a class="back" href="{{ url_for('index') }}">← 返回</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="tree" id="tree"></nav>
+  <section class="editor">
+    <div class="ed-head">
+      <div class="title" id="edTitle"><span class="muted">从左边选一个模块查看笔记</span></div>
+      <button id="edAdd" class="hidden">＋ 新笔记</button>
+    </div>
+    <div id="edList"><div class="ed-empty">左边目录树里点一个模块名，右边就会显示这个模块下的所有笔记，可以直接编辑、删除，也可以新建。笔记在对话页点右上角「✎ 笔记」时也是记到同一个地方。</div></div>
+    <div id="edSaved" class="hidden">已保存</div>
+  </section>
+</div>
+
+<script>
+  // 主题
+  try {
+    var hex = localStorage.getItem('iv_theme');
+    if (hex) {
+      var h2r = function(h){h=h.replace('#','');return [0,2,4].map(function(i){return parseInt(h.substr(i,2),16)});};
+      var mix = function(r,t,k){return r.map(function(c,i){return Math.round(c+(t[i]-c)*k)});};
+      var cssf = function(a){return 'rgb('+a[0]+','+a[1]+','+a[2]+')';};
+      var b = h2r(hex), s = document.documentElement.style;
+      s.setProperty('--accent', hex);
+      s.setProperty('--accent-strong', cssf(mix(b,[0,0,0],0.45)));
+      s.setProperty('--page-bg', cssf(mix(b,[255,255,255],0.82)));
+      s.setProperty('--header-bg', cssf(mix(b,[0,0,0],0.30)));
+      s.setProperty('--border', cssf(mix(b,[255,255,255],0.55)));
+    }
+  } catch (e) {}
+
+  const CATEGORIES = {{ categories|tojson }};
+  const MODES = [['learn', '学习笔记'], ['interview', '面试笔记']];
+  const el = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const keyOf = (mode, major, minor) => mode + '::' + major + '::' + minor;
+  const fmtTime = (iso) => iso ? String(iso).replace('T', ' ').slice(0, 16) : '';
+
+  let allNotes = {};
+  let sel = null;   // {mode, major, minor}
+
+  // #learn / #interview => 只看该分类；#all 或无 hash => 两个都看
+  function modeFilter(){
+    const h = (location.hash || '').replace('#', '');
+    return (h === 'learn' || h === 'interview') ? h : null;
+  }
+
+  async function loadAll(){
+    try { allNotes = await (await fetch('{{ url_for("notes_all") }}')).json(); }
+    catch (e) { allNotes = {}; }
+  }
+
+  function branch(cls, label){
+    const row = document.createElement('button');
+    row.className = 't-row ' + cls;
+    row.innerHTML = '<span class="caret">▸</span><span class="lbl">' + esc(label) + '</span>';
+    const kids = document.createElement('div');
+    kids.className = 't-children hidden';
+    row.onclick = () => { row.classList.toggle('open'); kids.classList.toggle('hidden'); };
+    const wrap = document.createElement('div');
+    wrap.appendChild(row); wrap.appendChild(kids);
+    return { wrap, row, kids };
+  }
+
+  function buildTree(){
+    const box = el('tree');
+    box.innerHTML = '';
+    const only = modeFilter();
+    const modes = only ? MODES.filter(([m]) => m === only) : MODES;
+    modes.forEach(([mode, label]) => {
+      const l1 = branch('t-l1', label);
+      l1.row.id = 'mode-' + mode;
+      Object.keys(CATEGORIES).forEach(major => {
+        const l2 = branch('t-l2', major);
+        CATEGORIES[major].forEach(minor => {
+          const cnt = (allNotes[keyOf(mode, major, minor)] || []).length;
+          const leaf = document.createElement('button');
+          leaf.className = 't-row t-l3';
+          leaf.dataset.mode = mode; leaf.dataset.major = major; leaf.dataset.minor = minor;
+          leaf.innerHTML = '<span class="lbl">' + esc(minor) + '</span><span class="cnt">' + cnt + '</span>';
+          leaf.onclick = () => selectMinor(mode, major, minor);
+          l2.kids.appendChild(leaf);
+        });
+        l1.kids.appendChild(l2.wrap);
+      });
+      box.appendChild(l1.wrap);
+    });
+    // 只看一个分类时，直接把它展开
+    if (only) { const md = el('mode-' + only); if (md) { md.classList.add('open'); md.nextElementSibling.classList.remove('hidden'); } }
+  }
+
+  function syncHeader(){
+    const f = (location.hash || '').replace('#', '') || 'all';
+    el('hdrTitle').textContent = f === 'learn' ? '学习笔记' : f === 'interview' ? '面试笔记' : '笔记';
+    document.querySelectorAll('.hdr-nav a[data-f]').forEach(a =>
+      a.classList.toggle('on', a.dataset.f === f || (f === 'all' && a.dataset.f === 'all')));
+  }
+
+  function resetEditor(){
+    sel = null;
+    el('edTitle').innerHTML = '<span class="muted">从左边选一个模块查看笔记</span>';
+    el('edAdd').classList.add('hidden');
+    el('edList').innerHTML = '<div class="ed-empty">左边目录树里点一个模块名，右边就会显示这个模块下的所有笔记，可以直接编辑、删除，也可以新建。</div>';
+  }
+
+  function rebuild(){
+    resetEditor();
+    syncHeader();
+    buildTree();
+  }
+  window.addEventListener('hashchange', rebuild);
+
+  function refreshCount(){
+    if (!sel) return;
+    const cnt = el('edList').querySelectorAll('.note-item').length;
+    document.querySelectorAll('.t-l3').forEach(r => {
+      if (r.dataset.mode === sel.mode && r.dataset.major === sel.major && r.dataset.minor === sel.minor)
+        r.querySelector('.cnt').textContent = cnt;
+    });
+  }
+
+  function toast(){
+    const t = el('edSaved');
+    t.classList.remove('hidden'); t.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => {
+      t.style.opacity = '0';
+      setTimeout(() => t.classList.add('hidden'), 300);
+    }, 1200);
+  }
+
+  async function saveNote(box, tsEl){
+    if (!sel) return;
+    try {
+      const r = await fetch('{{ url_for("notes_save") }}', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ...sel, id: box.dataset.id || '', text: box._ta.value }),
+      });
+      const j = await r.json();
+      if (j.id) box.dataset.id = j.id;
+      if (j.updated) tsEl.textContent = '更新于 ' + fmtTime(j.updated);
+      toast();
+    } catch (e) {}
+  }
+
+  function makeItem(n){
+    const box = document.createElement('div');
+    box.className = 'note-item';
+    box.dataset.id = n.id || '';
+    const head = document.createElement('div');
+    head.className = 'note-time';
+    const ts = document.createElement('span');
+    ts.textContent = n.updated ? ('更新于 ' + fmtTime(n.updated)) : '新笔记';
+    const del = document.createElement('button');
+    del.className = 'note-del'; del.textContent = '删除';
+    del.onclick = () => {
+      if (box._ta.value.trim() && !confirm('删除这条笔记？')) return;
+      clearTimeout(box._timer);
+      if (box.dataset.id && sel) {
+        fetch('{{ url_for("notes_delete") }}', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ ...sel, id: box.dataset.id }),
+        }).catch(() => {});
+      }
+      box.remove();
+      refreshCount();
+      if (!el('edList').querySelector('.note-item')) renderEmpty();
+    };
+    head.appendChild(ts); head.appendChild(del);
+    const ta = document.createElement('textarea');
+    ta.value = n.text || '';
+    ta.placeholder = '写点什么…停顿 1 秒自动保存';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    ta.addEventListener('input', () => {
+      grow();
+      clearTimeout(box._timer);
+      box._timer = setTimeout(() => { saveNote(box, ts).then(refreshCount); }, 1000);
+    });
+    box.appendChild(head); box.appendChild(ta);
+    box._ta = ta;
+    setTimeout(grow, 0);
+    return box;
+  }
+
+  function renderEmpty(){
+    el('edList').innerHTML = '<div class="ed-empty">这个模块还没有笔记，点右上角「＋ 新笔记」开始记。</div>';
+  }
+
+  function addBlank(){
+    if (!sel) return;
+    const list = el('edList');
+    const empty = list.querySelector('.ed-empty');
+    if (empty) list.innerHTML = '';
+    const box = makeItem({});
+    list.appendChild(box);
+    box._ta.focus();
+  }
+
+  async function selectMinor(mode, major, minor){
+    sel = { mode, major, minor };
+    document.querySelectorAll('.t-l3').forEach(r => r.classList.toggle('sel',
+      r.dataset.mode === mode && r.dataset.major === major && r.dataset.minor === minor));
+    el('edTitle').innerHTML = (mode === 'learn' ? '学习' : '面试') +
+      ' <span class="muted">·</span> ' + esc(major) + ' <span class="muted">·</span> ' + esc(minor);
+    el('edAdd').classList.remove('hidden');
+    const list = el('edList');
+    list.innerHTML = '<div class="ed-empty">加载中…</div>';
+    let arr = [];
+    try {
+      const r = await fetch('{{ url_for("notes_get") }}?mode=' + encodeURIComponent(mode) +
+        '&major=' + encodeURIComponent(major) + '&minor=' + encodeURIComponent(minor));
+      arr = (await r.json()).notes || [];
+    } catch (e) {}
+    allNotes[keyOf(mode, major, minor)] = arr;
+    list.innerHTML = '';
+    if (!arr.length) renderEmpty();
+    else arr.forEach(n => list.appendChild(makeItem(n)));
+    refreshCount();
+  }
+
+  el('edAdd').onclick = addBlank;
+
+  (async function init(){
+    await loadAll();
+    syncHeader();
+    buildTree();
+  })();
+</script>
+</body>
+</html>

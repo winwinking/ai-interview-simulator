@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>错题记录</title>
+<style>
+  :root {
+    --accent: #ffd6ff; --accent-strong: #a35c9c; --page-bg: #fff2fb;
+    --header-bg: #b96fb0; --border: #f2dced; --card-bg: #fff; --text: #3a2f38;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         background: var(--page-bg); color: var(--text); }
+  header { background: var(--header-bg); color: #fff; padding: 12px 20px; display: flex;
+           align-items: center; justify-content: space-between; }
+  header h1 { font-size: 17px; margin: 0; }
+  header a { color: #fff; text-decoration: none; font-size: 14px; }
+  main { max-width: 860px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 9px 16px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent;
+         color: #9a8f97; }
+  .tab.active { color: var(--accent-strong); border-bottom-color: var(--accent-strong); font-weight: 600; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  .card { position: relative; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+          padding: 16px 44px 16px 18px; margin-bottom: 14px; }
+  .card.mastered { opacity: .8; }
+  .q { font-weight: 600; line-height: 1.7; margin-bottom: 10px; }
+  .field { margin: 8px 0; line-height: 1.7; font-size: 14px; }
+  .label { display: inline-block; min-width: 68px; color: #9a8f97; font-weight: 600; vertical-align: top; }
+  .val { white-space: pre-wrap; }
+  .weak { color: var(--accent-strong); }
+  .times { display: inline-block; background: var(--accent); color: var(--accent-strong);
+           border-radius: 999px; padding: 1px 10px; font-weight: 600; }
+  .x-btn { position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; border-radius: 50%;
+           border: 1px solid var(--border); background: var(--page-bg); color: #9a8f97;
+           font-size: 15px; line-height: 1; cursor: pointer; }
+  .x-btn:hover { border-color: var(--accent-strong); color: var(--accent-strong); }
+  .restore-btn { position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 8px;
+                 border: 1px solid var(--border); background: var(--page-bg); color: var(--accent-strong);
+                 font-size: 12px; cursor: pointer; }
+  .restore-btn:hover { border-color: var(--accent-strong); }
+  .empty { color: #9a8f97; padding: 20px 0; }
+
+  /* 攻克历程 */
+  .journey { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .journey-title { font-size: 12px; color: #9a8f97; font-weight: 600; margin-bottom: 8px; }
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { position: relative; padding: 0 0 10px 18px; font-size: 13px; line-height: 1.5; }
+  .tl li:before { content: ''; position: absolute; left: 3px; top: 4px; width: 8px; height: 8px;
+                  border-radius: 50%; background: var(--accent-strong); }
+  .tl li:after { content: ''; position: absolute; left: 6.5px; top: 12px; bottom: 0; width: 1px; background: var(--border); }
+  .tl li:last-child { padding-bottom: 0; }
+  .tl li:last-child:after { display: none; }
+  .tl li.done:before { background: #4caf50; }
+  .tl .when { color: #9a8f97; margin-left: 6px; font-size: 12px; }
+
+  /* 薄弱点 */
+  .wg { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+        margin-bottom: 14px; overflow: hidden; }
+  .wg-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; cursor: pointer;
+             background: var(--accent); }
+  .wg-head .tag { font-weight: 700; color: var(--accent-strong); font-size: 15px; }
+  .wg-head .cnt { font-size: 12px; color: var(--accent-strong); background: var(--card-bg);
+                  border-radius: 999px; padding: 1px 9px; }
+  .wg-body { padding: 6px 16px 12px; }
+  .wg-q { padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; line-height: 1.6; }
+  .wg-q:last-child { border-bottom: none; }
+  .wg-q .times { margin-left: 6px; font-size: 11px; padding: 0 7px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>错题记录</h1>
+  <a href="{{ url_for('index') }}">← 返回练习</a>
+</header>
+<main>
+  <div class="tabs">
+    <div class="tab active" data-pane="wrong">错题（{{ wrong_list|length }}）</div>
+    <div class="tab" data-pane="weak">薄弱点（{{ weak_groups|length }}）</div>
+    <div class="tab" data-pane="mastered">已掌握（{{ mastered_list|length }}）</div>
+  </div>
+
+  {% macro journey(item, mastered=False) -%}
+    <div class="journey">
+      <div class="journey-title">攻克历程</div>
+      {% set hist = item.history or [] %}
+      {% if hist %}
+        <ul class="tl">
+          {% for h in hist %}
+            <li class="{{ 'done' if '掌握' in h.event else '' }}">
+              {{ h.event }}<span class="when">{{ h.at|replace('T',' ') }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <ul class="tl">
+          {% if item.first_wrong_at %}<li>首次答错<span class="when">{{ item.first_wrong_at|replace('T',' ') }}</span></li>{% endif %}
+          <li>累计答错 {{ item.times_wrong or 1 }} 次{% if not item.first_wrong_at %}（早期错题，无详细时间戳）{% endif %}</li>
+          {% if mastered and item.mastered_at %}<li class="done">标记为已掌握<span class="when">{{ item.mastered_at|replace('T',' ') }}</span></li>{% endif %}
+        </ul>
+      {% endif %}
+    </div>
+  {%- endmacro %}
+
+  <!-- ===== 错题 ===== -->
+  <div class="pane active" id="pane-wrong">
+    {% if not wrong_list %}<div class="empty">目前没有错题。</div>{% endif %}
+    {% for item in wrong_list %}
+      <div class="card" data-q="{{ item.question|e }}">
+        <button class="x-btn" title="标记为已掌握">&times;</button>
+        <div class="q">{{ loop.index }}. {{ item.question }}</div>
+        {% if item.weak_tag %}<div class="field"><span class="label">知识点</span><span class="val weak">{{ item.weak_tag }}</span></div>{% endif %}
+        <div class="field"><span class="label">你的回答</span><span class="val">{{ item.user_answer }}</span></div>
+        <div class="field"><span class="label">标准答案</span><span class="val">{{ item.correct_answer }}</span></div>
+        <div class="field"><span class="label">薄弱点</span><span class="val weak">{{ item.weak_points }}</span></div>
+        {% if item.scores %}<div class="field"><span class="label">评分</span><span class="val">准确 {{ item.scores.accuracy }} · 完整 {{ item.scores.completeness }} · 清晰 {{ item.scores.clarity }}{% if item.followup_rounds %} · 追问 {{ item.followup_rounds }} 轮{% endif %}</span></div>{% endif %}
+        <div class="field"><span class="label">错误次数</span><span class="times">{{ item.times_wrong }}</span></div>
+        {{ journey(item) }}
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- ===== 薄弱点 ===== -->
+  <div class="pane" id="pane-weak">
+    {% if not weak_groups %}<div class="empty">还没有可归类的薄弱点。</div>{% endif %}
+    {% for g in weak_groups %}
+      <div class="wg">
+        <div class="wg-head">
+          <span class="tag">{{ g.tag }}</span>
+          <span class="cnt">{{ g.count }} 道题</span>
+        </div>
+        <div class="wg-body">
+          {% for it in g['items'] %}
+            <div class="wg-q">{{ it.question }}<span class="times">错 {{ it.times_wrong }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- ===== 已掌握 ===== -->
+  <div class="pane" id="pane-mastered">
+    {% if not mastered_list %}<div class="empty">还没有已掌握的题。点错题右上角的 × 把它移到这里，之后就不会再优先出这道题。</div>{% endif %}
+    {% for item in mastered_list %}
+      <div class="card mastered" data-q="{{ item.question|e }}">
+        <button class="restore-btn" title="移回错题">恢复</button>
+        <div class="q">{{ item.question }}</div>
+        {% if item.weak_tag %}<div class="field"><span class="label">知识点</span><span class="val weak">{{ item.weak_tag }}</span></div>{% endif %}
+        <div class="field"><span class="label">标准答案</span><span class="val">{{ item.correct_answer }}</span></div>
+        <div class="field"><span class="label">薄弱点</span><span class="val weak">{{ item.weak_points }}</span></div>
+        {% if item.scores %}<div class="field"><span class="label">评分</span><span class="val">准确 {{ item.scores.accuracy }} · 完整 {{ item.scores.completeness }} · 清晰 {{ item.scores.clarity }}</span></div>{% endif %}
+        {{ journey(item, mastered=True) }}
+      </div>
+    {% endfor %}
+  </div>
+</main>
+
+<script>
+  try {
+    var hex = localStorage.getItem('iv_theme');
+    if (hex) {
+      var h2r = function(h){h=h.replace('#','');return [0,2,4].map(function(i){return parseInt(h.substr(i,2),16)});};
+      var mix = function(r,t,k){return r.map(function(c,i){return Math.round(c+(t[i]-c)*k)});};
+      var cssf = function(a){return 'rgb('+a[0]+','+a[1]+','+a[2]+')';};
+      var b = h2r(hex), s = document.documentElement.style;
+      s.setProperty('--accent', hex);
+      s.setProperty('--accent-strong', cssf(mix(b,[0,0,0],0.45)));
+      s.setProperty('--page-bg', cssf(mix(b,[255,255,255],0.82)));
+      s.setProperty('--header-bg', cssf(mix(b,[0,0,0],0.30)));
+      s.setProperty('--border', cssf(mix(b,[255,255,255],0.55)));
+    }
+  } catch (e) {}
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('pane-' + t.dataset.pane).classList.add('active');
+    };
+  });
+
+  async function move(url, q, card, after){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                               body: JSON.stringify({question: q})});
+    if (r.ok) { card.remove(); if (after) after(); }
+    else { alert('操作失败'); }
+  }
+  document.querySelectorAll('#pane-wrong .card').forEach(card => {
+    card.querySelector('.x-btn').onclick = () =>
+      move('{{ url_for("master") }}', card.dataset.q, card, () => setTimeout(() => location.reload(), 250));
+  });
+  document.querySelectorAll('#pane-mastered .card').forEach(card => {
+    card.querySelector('.restore-btn').onclick = () =>
+      move('{{ url_for("unmaster") }}', card.dataset.q, card, () => setTimeout(() => location.reload(), 250));
+  });
+</script>
+</body>
+</html>

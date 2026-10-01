@@ -1,0 +1,21 @@
+# secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# 向量库持久化（体积大 + 由题库内容重建，不进仓库）
+chroma_db/
+
+# 日志
+server.log
+*.log
+
+# 个人数据：现在都在 MySQL，这些文件名只在有人把旧 JSON 导出/拷到项目目录时兜底排除
+wrong_answers.json
+mastered_answers.json
+notes.json
+activity.json
+study_time.json
+daily_log.json

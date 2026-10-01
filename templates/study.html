@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习时间</title>
+<style>
+  :root {
+    --accent: #ffd6ff; --accent-strong: #a35c9c; --page-bg: #fff2fb;
+    --header-bg: #b96fb0; --border: #f2dced; --card-bg: #fff; --text: #3a2f38;
+    --grid: #eadfe7; --ink-muted: #9a8f97;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         background: var(--page-bg); color: var(--text); }
+  header { background: var(--header-bg); color: #fff; padding: 12px 20px; display: flex;
+           align-items: center; justify-content: space-between; }
+  header h1 { font-size: 17px; margin: 0; }
+  header a { color: #fff; text-decoration: none; font-size: 14px; }
+  main { max-width: 820px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  .hero { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
+  .tile { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+          padding: 16px 20px; flex: 1 1 150px; }
+  .tile .k { font-size: 12px; color: var(--ink-muted); }
+  .tile .v { font-size: 24px; font-weight: 700; color: var(--accent-strong); margin-top: 4px; }
+
+  h2 { font-size: 15px; margin: 26px 0 12px; }
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .chart-wrap { overflow-x: auto; }
+  svg { display: block; }
+  .bar-row-label { font-size: 12px; fill: var(--text); }
+  .bar-val { font-size: 11px; fill: var(--ink-muted); }
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .axis-txt { font-size: 10.5px; fill: var(--ink-muted); }
+  .empty { color: var(--ink-muted); padding: 14px 0; }
+  .tip { position: fixed; pointer-events: none; background: var(--text); color: #fff; font-size: 12px;
+         padding: 5px 9px; border-radius: 6px; opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 10; }
+</style>
+</head>
+<body>
+<header>
+  <h1>学习时间</h1>
+  <a href="{{ url_for('index') }}">← 返回练习</a>
+</header>
+<main>
+  <div class="hero">
+    <div class="tile"><div class="k">总累计学习时间</div><div class="v" id="totalV">—</div></div>
+    <div class="tile"><div class="k">学习天数</div><div class="v" id="daysV">—</div></div>
+    <div class="tile"><div class="k">日均</div><div class="v" id="avgV">—</div></div>
+  </div>
+
+  <h2>各模块学习时间</h2>
+  <div class="card chart-wrap"><div id="moduleChart"><div class="empty">还没有数据</div></div></div>
+
+  <h2>每天学习时间</h2>
+  <div class="card chart-wrap"><div id="dailyChart"><div class="empty">还没有数据</div></div></div>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+  /* 主题 */
+  try {
+    var hex = localStorage.getItem('iv_theme');
+    if (hex) {
+      var h2r = function(h){h=h.replace('#','');return [0,2,4].map(function(i){return parseInt(h.substr(i,2),16)});};
+      var mixc = function(r,t,k){return r.map(function(c,i){return Math.round(c+(t[i]-c)*k)});};
+      var cssf = function(a){return 'rgb('+a[0]+','+a[1]+','+a[2]+')';};
+      var bb = h2r(hex), st = document.documentElement.style;
+      st.setProperty('--accent', hex);
+      st.setProperty('--accent-strong', cssf(mixc(bb,[0,0,0],0.45)));
+      st.setProperty('--page-bg', cssf(mixc(bb,[255,255,255],0.82)));
+      st.setProperty('--header-bg', cssf(mixc(bb,[0,0,0],0.30)));
+      st.setProperty('--border', cssf(mixc(bb,[255,255,255],0.55)));
+      st.setProperty('--grid', cssf(mixc(bb,[255,255,255],0.62)));
+    }
+  } catch (e) {}
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const tip = document.getElementById('tip');
+  const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent-strong').trim() || '#a35c9c';
+  function fmt(sec){
+    const m = Math.round(sec / 60);
+    if (m < 60) return m + ' 分钟';
+    return Math.floor(m / 60) + ' 时 ' + (m % 60) + ' 分';
+  }
+  function showTip(evt, txt){
+    tip.textContent = txt;
+    tip.style.left = (evt.clientX + 12) + 'px';
+    tip.style.top = (evt.clientY - 10) + 'px';
+    tip.style.opacity = 1;
+  }
+  function hideTip(){ tip.style.opacity = 0; }
+  function mk(tag, attrs){
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function barChart(host, entries){
+    // entries: [[label, seconds], ...] 已按秒数降序
+    host.innerHTML = '';
+    if (!entries.length) { host.innerHTML = '<div class="empty">还没有数据</div>'; return; }
+    const rowH = 34, padL = 96, padR = 56, padT = 8, padB = 8;
+    const w = Math.max(host.clientWidth || 640, 420);
+    const h = padT + padB + entries.length * rowH;
+    const max = Math.max(...entries.map(e => e[1])) || 1;
+    const bw = w - padL - padR;
+    const svg = mk('svg', { width: w, height: h, viewBox: '0 0 ' + w + ' ' + h });
+    entries.forEach(([label, sec], i) => {
+      const y = padT + i * rowH + rowH / 2;
+      const len = Math.max(3, bw * sec / max);
+      svg.appendChild(mk('text', { x: padL - 10, y: y + 4, 'text-anchor': 'end', class: 'bar-row-label' })).textContent =
+        label.length > 7 ? label.slice(0, 7) + '…' : label;
+      const rect = mk('rect', { x: padL, y: y - 8, width: len, height: 16, rx: 4, fill: accent() });
+      rect.addEventListener('mousemove', e => showTip(e, label + '：' + fmt(sec)));
+      rect.addEventListener('mouseleave', hideTip);
+      svg.appendChild(rect);
+      svg.appendChild(mk('text', { x: padL + len + 6, y: y + 4, class: 'bar-val' })).textContent = fmt(sec);
+    });
+    host.appendChild(svg);
+  }
+
+  function lineChart(host, entries){
+    // entries: [[date, seconds], ...] 已按日期升序
+    host.innerHTML = '';
+    if (!entries.length) { host.innerHTML = '<div class="empty">还没有数据</div>'; return; }
+    const padL = 44, padR = 16, padT = 14, padB = 30;
+    const w = Math.max(host.clientWidth || 680, Math.min(900, 60 + entries.length * 46));
+    const h = 240;
+    const maxMin = Math.max(...entries.map(e => e[1] / 60), 10);
+    const x = i => padL + (entries.length === 1 ? (w - padL - padR) / 2 : i * (w - padL - padR) / (entries.length - 1));
+    const y = m => padT + (h - padT - padB) * (1 - m / maxMin);
+    const svg = mk('svg', { width: w, height: h, viewBox: '0 0 ' + w + ' ' + h });
+    // y 网格 + 刻度
+    const ticks = 4;
+    for (let t = 0; t <= ticks; t++) {
+      const mv = maxMin * t / ticks, yy = y(mv);
+      svg.appendChild(mk('line', { x1: padL, y1: yy, x2: w - padR, y2: yy, class: 'grid-line' }));
+      svg.appendChild(mk('text', { x: padL - 8, y: yy + 3, 'text-anchor': 'end', class: 'axis-txt' })).textContent = Math.round(mv) + 'm';
+    }
+    // 折线
+    const pts = entries.map((e, i) => [x(i), y(e[1] / 60)]);
+    if (pts.length > 1) {
+      svg.appendChild(mk('polyline', {
+        points: pts.map(p => p.join(',')).join(' '),
+        fill: 'none', stroke: accent(), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+      }));
+    }
+    entries.forEach((e, i) => {
+      const [px, py] = pts[i];
+      const dot = mk('circle', { cx: px, cy: py, r: 5, fill: accent() });
+      dot.addEventListener('mousemove', ev => showTip(ev, e[0].slice(5) + '：' + fmt(e[1])));
+      dot.addEventListener('mouseleave', hideTip);
+      svg.appendChild(dot);
+      if (i % Math.ceil(entries.length / 8) === 0 || i === entries.length - 1) {
+        svg.appendChild(mk('text', { x: px, y: h - 10, 'text-anchor': 'middle', class: 'axis-txt' })).textContent = e[0].slice(5);
+      }
+    });
+    host.appendChild(svg);
+  }
+
+  fetch('{{ url_for("study_time") }}').then(r => r.json()).then(d => {
+    const byDate = d.byDate || {}, byModule = d.byModule || {};
+    const days = Object.keys(byDate).length;
+    document.getElementById('totalV').textContent = d.total ? fmt(d.total) : '0 分钟';
+    document.getElementById('daysV').textContent = days + ' 天';
+    document.getElementById('avgV').textContent = days ? fmt(d.total / days) : '0 分钟';
+    barChart(document.getElementById('moduleChart'),
+             Object.entries(byModule).sort((a, b) => b[1] - a[1]));
+    lineChart(document.getElementById('dailyChart'),
+              Object.entries(byDate).sort((a, b) => a[0] < b[0] ? -1 : 1));
+  }).catch(() => {});
+</script>
+</body>
+</html>
